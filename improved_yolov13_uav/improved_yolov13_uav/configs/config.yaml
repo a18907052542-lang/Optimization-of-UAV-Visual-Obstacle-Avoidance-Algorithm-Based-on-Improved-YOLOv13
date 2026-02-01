@@ -1,0 +1,147 @@
+# Improved YOLOv13 Configuration for UAV Visual Obstacle Avoidance
+# Based on paper: Optimization of UAV Visual Obstacle Avoidance Algorithm
+
+# Model Configuration
+model:
+  name: "improved_yolov13"
+  backbone: "ds_c3k2"  # Depthwise Separable C3k2
+  neck: "bifpn_fullpad"  # BiFPN with FullPAD paradigm
+  head: "decoupled"  # Decoupled detection head
+  num_classes: 10  # VisDrone2019 categories
+  
+  # Detection scales (P2, P3, P4, P5)
+  scales:
+    - 4    # P2: 1/4 input resolution (new high-res layer)
+    - 8    # P3: 1/8 input resolution
+    - 16   # P4: 1/16 input resolution
+    - 32   # P5: 1/32 input resolution
+  
+  # Channel configuration
+  channels:
+    backbone: [64, 128, 256, 512]
+    neck: [64, 128, 256, 512]
+    
+  # Attention mechanism
+  attention:
+    enabled: true
+    reduction_ratio: 16  # r in Equation (7)
+    spatial_kernel: 7    # 7x7 kernel in Equation (6)
+    
+  # Deformable convolution
+  dcn:
+    enabled: true
+    num_deformable_groups: 1
+
+# Training Configuration
+training:
+  epochs: 300
+  batch_size: 16
+  input_size: 640
+  
+  # Optimizer - SGD with momentum (as per paper)
+  optimizer:
+    type: "sgd"
+    lr: 0.01
+    momentum: 0.937
+    weight_decay: 0.0005
+    
+  # Learning rate scheduler - Cosine annealing
+  scheduler:
+    type: "cosine"
+    warmup_epochs: 3
+    min_lr: 0.0001
+    
+  # Loss function weights
+  loss:
+    cls_weight: 1.0
+    loc_weight: 1.0
+    obj_weight: 1.0
+    focal_alpha: 0.25      # α in Equation (3)
+    focal_gamma: 2.0       # γ in Equation (3)
+
+# Data Augmentation (as per paper Section 4.1)
+augmentation:
+  mosaic:
+    enabled: true
+    probability: 1.0
+  mixup:
+    enabled: true
+    alpha: 0.2
+  random_crop:
+    enabled: true
+    scale: [0.5, 1.0]
+  color_jitter:
+    enabled: true
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
+    hue: 0.1
+  hsv:
+    h_gain: 0.015
+    s_gain: 0.7
+    v_gain: 0.4
+  flip:
+    horizontal: 0.5
+    vertical: 0.0
+
+# Dataset Configuration
+data:
+  train_path: "data/visdrone/train"
+  val_path: "data/visdrone/val"
+  test_path: "data/visdrone/test"
+  num_workers: 8
+  
+  # VisDrone2019 categories
+  classes:
+    - "pedestrian"
+    - "people"
+    - "bicycle"
+    - "car"
+    - "van"
+    - "truck"
+    - "tricycle"
+    - "awning-tricycle"
+    - "bus"
+    - "motor"
+
+# Quantization Configuration (INT8 QAT)
+quantization:
+  enabled: true
+  qat_epochs: 10
+  calibration_batches: 100
+  backend: "qnnpack"  # or "fbgemm" for x86
+
+# Obstacle Avoidance Decision Parameters (Equations 8-9)
+obstacle_avoidance:
+  # Hazard level parameters (Equation 8)
+  alpha: 0.5      # Distance decay factor
+  beta: 0.3       # Relative velocity weight
+  gamma: 0.2      # Area weight
+  
+  # Path planning parameters (Equation 9)
+  w1: 1.0         # Safety weight
+  w2: 0.3         # Smoothness weight
+  w3: 0.5         # Goal orientation weight
+
+# Evaluation Configuration
+evaluation:
+  iou_thresholds: [0.5, 0.75]
+  conf_threshold: 0.001
+  nms_threshold: 0.6
+  
+  # Target size thresholds (pixels)
+  small_threshold: 32    # APS: < 32x32
+  medium_threshold: 96   # APM: 32x32 ~ 96x96
+  # APL: > 96x96
+
+# Hardware Configuration
+hardware:
+  device: "cuda"
+  fp16: true
+  tensorrt: false
+  
+# Logging
+logging:
+  save_dir: "runs/train"
+  log_interval: 50
+  save_interval: 10
